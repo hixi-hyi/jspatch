@@ -163,6 +163,67 @@ func Test3NestedCheckSucceed(t *testing.T) {
 		}
 	}
 }
+func Test3NestedCheckFailure(t *testing.T) {
+	type Company struct {
+		Address string `json:"address" patch:"replace"`
+	}
+	type User struct {
+		Name    string  `json:"name" patch:"replace"`
+		Company Company `json:"company" patch:"replace"`
+	}
+	type Model struct {
+		ID   int64 `json:"id" patch:"-"`
+		User User  `json:"user" patch:"-"`
+	}
+	// replace /user/company/address
+	{
+		jpdoc := JSONPatchDocument.New()
+		jp := JSONPatch.New()
+		jp.Op = "remove"
+		jp.Path = "/user/company/address"
+		jpdoc.Add(jp)
+
+		model := &Model{
+			ID: 100,
+			User: User{
+				Name: "hixi",
+				Company: Company{
+					Address: "Toyama",
+				},
+			},
+		}
+
+		err := jpdoc.Check(model)
+		if err == nil {
+			t.Errorf("error occured: %#v", err)
+		}
+		t.Logf("expected error occured: %s", err)
+	}
+	// replace /user/company/-
+	{
+		jpdoc := JSONPatchDocument.New()
+		jp := JSONPatch.New()
+		jp.Op = "remove"
+		jp.Path = "/user/company"
+		jpdoc.Add(jp)
+
+		model := &Model{
+			ID: 100,
+			User: User{
+				Name: "hixi",
+				Company: Company{
+					Address: "Toyama",
+				},
+			},
+		}
+
+		err := jpdoc.Check(model)
+		if err == nil {
+			t.Errorf("error occured: %#v", err)
+		}
+		t.Logf("expected error occured: %s", err)
+	}
+}
 
 func TestNestedCheckFailure(t *testing.T) {
 	type User struct {

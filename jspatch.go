@@ -47,17 +47,15 @@ func (jpdoc jsonPatchDocument) CheckWithPrefix(m interface{}, prefix string) err
 	numFields := t.NumField()
 	for i := 0; i < numFields; i++ {
 		tf := t.Field(i)
-		switch tf.Type.Kind() {
-		case reflect.Struct:
+		if tf.Type.Kind() == reflect.Struct {
 			jt := tf.Tag.Get("json")
 			if err := jpdoc.CheckWithPrefix(v.Field(i).Interface(), prefix+jt+"/"); err != nil {
 				return err
 			}
-		default:
-			jt := tf.Tag.Get("json")
-			jp := tf.Tag.Get("patch")
-			allowlist[prefix+jt] = jp
 		}
+		jt := tf.Tag.Get("json")
+		jp := tf.Tag.Get("patch")
+		allowlist[prefix+jt] = jp
 	}
 
 	for _, jp := range jpdoc {
