@@ -15,7 +15,7 @@ type jsonPatch struct {
 	Path  string      `json:"path" binding:"required"`
 	Value interface{} `json:"value"`
 }
-type jsonPatchDocument []jsonPatch
+type jsonPatchDocument []*jsonPatch
 
 var JSONPatch = &jsonPatch{}
 var JSONPatchDocument = jsonPatchDocument{}
@@ -35,40 +35,46 @@ func (m *jsonPatchDocument) Bind(req *http.Request) error {
 	return err
 }
 
-func (jpdoc jsonPatchDocument) CheckAllowOperation(m interface{}) error {
+func (m *jsonPatchDocument) Add(jp *jsonPatch) {
+	*m = append(*m, jp)
+}
+
+func (jpdoc jsonPatchDocument) Check(m interface{}) error {
 	allowlist := map[string]string{} // path : ops
 
 	v := reflect.Indirect(reflect.ValueOf(m))
 	t := v.Type()
 	numFields := t.NumField()
+	// TODO ネストされた構造体
 	for i := 0; i < numFields; i++ {
 		tf := t.Field(i)
 		jt := tf.Tag.Get("json")
 		jp := tf.Tag.Get("patch")
-		allowlist[jt] = jp
+		allowlist["/"+jt] = jp
 	}
 
 	for _, jp := range jpdoc {
 		al := allowlist[jp.Path]
 		if al != "" {
 			if al == "-" {
-				return fmt.Errorf("%s: %s operator is not allowed.", jp.Path, jp.Op)
+				return fmt.Errorf("'%s' operation is not allowed. [%s]", jp.Op, jp.Path)
 			}
 			if !strings.Contains(al, jp.Op) {
-				return fmt.Errorf("%s: %s operator is not allowed. allow [%s]", jp.Path, jp.Op, al)
+				return fmt.Errorf("'%s' operation is not allowed. [%s]. allow [%s]", jp.Op, jp.Path, al)
 			}
 		}
 	}
 
 	return nil
 }
-
-func (jpdoc *jsonPatchDocument) Apply(m interface{}) error {
-
-	if err := jpdoc.CheckAllowOperation(m); err != nil {
+func (jpdoc *jsonPatchDocument) CheckApply(m interface{}) error {
+	if err := jpdoc.Check(m); err != nil {
 		return err
 	}
+	return jpdoc.Apply(m)
+}
 
+func (jpdoc *jsonPatchDocument) Apply(m interface{}) error {
 	doc, err := json.Marshal(m)
 	if err != nil {
 		return err
@@ -87,6 +93,10 @@ func (jpdoc *jsonPatchDocument) Apply(m interface{}) error {
 	if err != nil {
 		return err
 	}
+
+	// clear
+	p := reflect.ValueOf(m).Elem()
+	p.Set(reflect.Zero(p.Type()))
 
 	err = json.Unmarshal(applied, m)
 	if err != nil {
