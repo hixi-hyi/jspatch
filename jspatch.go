@@ -39,18 +39,25 @@ func (m *jsonPatchDocument) Add(jp *jsonPatch) {
 	*m = append(*m, jp)
 }
 
-func (jpdoc jsonPatchDocument) Check(m interface{}) error {
+func (jpdoc jsonPatchDocument) CheckWithPrefix(m interface{}, prefix string) error {
 	allowlist := map[string]string{} // path : ops
 
 	v := reflect.Indirect(reflect.ValueOf(m))
 	t := v.Type()
 	numFields := t.NumField()
-	// TODO ネストされた構造体
 	for i := 0; i < numFields; i++ {
 		tf := t.Field(i)
-		jt := tf.Tag.Get("json")
-		jp := tf.Tag.Get("patch")
-		allowlist["/"+jt] = jp
+		switch tf.Type.Kind() {
+		case reflect.Struct:
+			jt := tf.Tag.Get("json")
+			if err := jpdoc.CheckWithPrefix(v.Field(i).Interface(), prefix+jt+"/"); err != nil {
+				return err
+			}
+		default:
+			jt := tf.Tag.Get("json")
+			jp := tf.Tag.Get("patch")
+			allowlist[prefix+jt] = jp
+		}
 	}
 
 	for _, jp := range jpdoc {
@@ -67,6 +74,11 @@ func (jpdoc jsonPatchDocument) Check(m interface{}) error {
 
 	return nil
 }
+
+func (jpdoc jsonPatchDocument) Check(m interface{}) error {
+	return jpdoc.CheckWithPrefix(m, "/")
+}
+
 func (jpdoc *jsonPatchDocument) CheckApply(m interface{}) error {
 	if err := jpdoc.Check(m); err != nil {
 		return err
